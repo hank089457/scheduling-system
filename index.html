@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>多地點輪替排班系統</title>
+    <style>
+        /* 保留原有樣式 */
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f0f2f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1, h2 {
+            color: #1a73e8;
+            margin-bottom: 20px;
+        }
+        .section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input, select {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin-bottom: 10px;
+        }
+        button {
+            background-color: #1a73e8;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+        button:hover {
+            background-color: #1557b0;
+        }
+        .schedule-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        .schedule-table th, .schedule-table td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        .schedule-table th {
+            background-color: #f8f9fa;
+        }
+        .extra-shift {
+            color: #1a73e8;
+            font-weight: bold;
+        }
+        .staff-info {
+            margin-bottom: 20px;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+        }
+        .add-location-form {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 20px;
+            align-items: end;
+        }
+        .location-list {
+            margin-top: 10px;
+        }
+        .location-item {
+            background-color: #e8f0fe;
+            padding: 8px;
+            border-radius: 4px;
+            margin-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .select-container {
+            width: 100%;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>多地點輪替排班系統</h1>
+        
+        <div class="staff-info">
+            <h2>固定員工編號</h2>
+            <p>排班順序：42 → 43 → 21 → 22 → 23</p>
+        </div>
+
+        <div class="section">
+            <h2>基本設定</h2>
+            <div class="form-group">
+                <label for="startTime">開始時間：</label>
+                <input type="time" id="startTime" value="09:00">
+            </div>
+            <div class="form-group">
+                <label for="endTime">結束時間：</label>
+                <input type="time" id="endTime" value="13:00">
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>新增地點</h2>
+            <div class="add-location-form">
+                <div class="form-group">
+                    <label for="locationSelect">選擇地點：</label>
+                    <select id="locationSelect" class="select-container">
+                        <option value="">請選擇地點</option>
+                        <option value="312">312</option>
+                        <option value="315">315</option>
+                        <option value="大禮堂">大禮堂</option>
+                        <option value="晴廳">晴廳</option>
+                        <option value="綠廳">綠廳</option>
+                        <option value="虹廳">虹廳</option>
+                        <option value="敞廳">敞廳</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="startFromTime">開始時間：</label>
+                    <input type="time" id="startFromTime">
+                </div>
+                <div class="form-group">
+                    <label for="needRest">排班模式：</label>
+                    <select id="needRest">
+                        <option value="false">連續排班</option>
+                        <option value="true">30分鐘工作30分鐘休息</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <button onclick="addLocation()" style="width: auto;">新增地點</button>
+                </div>
+            </div>
+            <div id="locationList" class="location-list"></div>
+        </div>
+
+        <div class="section">
+            <h2>排班表</h2>
+            <button onclick="generateSchedule()">生成排班表</button>
+            <button onclick="exportSchedule()">匯出排班表</button>
+            <div id="scheduleTableContainer"></div>
+        </div>
+    </div>
+
+    <script>
+        const staffNumbers = ['42', '43', '21', '22', '23'];
+        let locations = [{ name: '辦公室', startTime: '', needRest: false }]; // 修改主要地點名稱
+        let schedule = [];
+
+        // 檢查地點是否已存在
+        function isLocationExists(name) {
+            return locations.some(loc => loc.name === name);
+        }
+
+        function addLocation() {
+            const locationSelect = document.getElementById('locationSelect');
+            const name = locationSelect.value;
+            const startTime = document.getElementById('startFromTime').value;
+            const needRest = document.getElementById('needRest').value === 'true';
+
+            if (!name) {
+                alert('請選擇地點');
+                return;
+            }
+            if (!startTime) {
+                alert('請選擇開始時間');
+                return;
+            }
+            if (isLocationExists(name)) {
+                alert('此地點已存在');
+                return;
+            }
+
+            locations.push({
+                name: name,
+                startTime: startTime,
+                needRest: needRest
+            });
+
+            locationSelect.value = '';
+            document.getElementById('startFromTime').value = '';
+            
+            updateLocationList();
+            generateSchedule();
+        }
+
+        function updateLocationList() {
+            const container = document.getElementById('locationList');
+            container.innerHTML = '';
+
+            locations.slice(1).forEach((location, index) => {
+                const div = document.createElement('div');
+                div.className = 'location-item';
+                div.innerHTML = `
+                    <span>${location.name} (從 ${location.startTime} 開始)
+                    ${location.needRest ? ' - 工作30分鐘休息30分鐘' : ' - 連續排班'}</span>
+                    <button onclick="removeLocation(${index + 1})">删除</button>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        function removeLocation(index) {
+            locations.splice(index, 1);
+            updateLocationList();
+            generateSchedule();
+        }
+
+        function generateTimeSlots(startTime, endTime) {
+            const slots = [];
+            let current = new Date(`2024-01-01 ${startTime}`);
+            const end = new Date(`2024-01-01 ${endTime}`);
+            
+            while (current < end) {
+                const timeString = current.toLocaleTimeString('zh-TW', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    hour12: false
+                });
+                
+                current = new Date(current.getTime() + 30 * 60000);
+                const nextTimeString = current.toLocaleTimeString('zh-TW', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    hour12: false
+                });
+
+                slots.push({
+                    time: `${timeString} - ${nextTimeString}`,
+                    startTime: timeString,
+                    endTime: nextTimeString
+                });
+            }
+            return slots;
+        }
+
+        function generateSchedule() {
+            const startTime = document.getElementById('startTime').value;
+            const endTime = document.getElementById('endTime').value;
+            const timeSlots = generateTimeSlots(startTime, endTime);
+            schedule = [];
+
+            let mainLocationIndex = 0;
+            
+            timeSlots.forEach((slot, slotIndex) => {
+                const isLastSlot = slotIndex === timeSlots.length - 1;
+                const scheduleEntry = {
+                    timeSlot: slot.time,
+                    assignments: {}
+                };
+
+                // 主要地點排班
+                const mainStaff = staffNumbers[mainLocationIndex % staffNumbers.length];
+                const nextStaff = staffNumbers[(mainLocationIndex + 1) % staffNumbers.length];
+                
+                scheduleEntry.assignments['辦公室'] = {
+                    staff: mainStaff,
+                    extraStaff: isLastSlot ? nextStaff : null
+                };
+
+                // 其他地點排班
+                locations.slice(1).forEach(location => {
+                    if (slot.startTime >= location.startTime) {
+                        if (location.needRest) {
+                            const slotsSinceStart = Math.floor((new Date(`2024-01-01 ${slot.startTime}`) - 
+                                                              new Date(`2024-01-01 ${location.startTime}`)) / (30 * 60000));
+                            if (slotsSinceStart % 2 === 0) {
+                                const staffForLocation = staffNumbers[(mainLocationIndex + 1) % staffNumbers.length];
+                                scheduleEntry.assignments[location.name] = {
+                                    staff: staffForLocation,
+                                    extraStaff: null
+                                };
+                            }
+                        } else {
+                            const staffForLocation = staffNumbers[(mainLocationIndex + 1) % staffNumbers.length];
+                            scheduleEntry.assignments[location.name] = {
+                                staff: staffForLocation,
+                                extraStaff: null
+                            };
+                        }
+                    }
+                });
+
+                schedule.push(scheduleEntry);
+                mainLocationIndex++;
+            });
+
+            updateScheduleView();
+        }
+
+        function updateScheduleView() {
+            const container = document.getElementById('scheduleTableContainer');
+            
+            let tableHTML = `
+                <table class="schedule-table">
+                    <thead>
+                        <tr>
+                            <th>時段</th>
+            `;
+            
+            locations.forEach(location => {
+                tableHTML += `
+                    <th>${location.name}</th>
+                    <th>${location.name} 加崗</th>
+                `;
+            });
+            
+            tableHTML += `
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+            
+            schedule.forEach(slot => {
+                let rowHTML = `<tr><td>${slot.timeSlot}</td>`;
+                
+                locations.forEach(location => {
+                    const assignment = slot.assignments[location.name];
+                    if (assignment) {
+                        rowHTML += `
+                            <td>${assignment.staff || ''}</td>
+                            <td class="extra-shift">${assignment.extraStaff || ''}</td>
+                        `;
+                    } else {
+                        rowHTML += `<td></td><td></td>`;
+                    }
+                });
+                
+                rowHTML += '</tr>';
+                tableHTML += rowHTML;
+            });
+            
+            tableHTML += '</tbody></table>';
+            container.innerHTML = tableHTML;
+        }
+
+        function exportSchedule() {
+            if (schedule.length === 0) {
+                alert('請先生成排班表');
+                return;
+            }
+            
+            let csv = '時段';
+            locations.forEach(location => {
+                csv += `,${location.name},${location.name} 加崗`;
+            });
+            csv += '\n';
+            
+            schedule.forEach(slot => {
+                let row = slot.timeSlot;
+                locations.forEach(location => {
+                    const assignment = slot.assignments[location.name];
+                    if (assignment) {
+                        row += `,${assignment.staff || ''},${assignment.extraStaff || ''}`;
+                    } else {
+                        row += ',,';
+                    }
+                });
+                csv += row + '\n';
+            });
+            
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = '排班表.csv';
+            link.click();
+        }
+
+        // 初始化
+        generateSchedule();
+    </script>
+</body>
+</html>
